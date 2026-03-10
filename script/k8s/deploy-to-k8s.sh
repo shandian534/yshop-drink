@@ -287,27 +287,23 @@ build_admin_image() {
     log_step "准备前端构建文件..."
     log_info "前端项目: ${ADMIN_PROJECT_PATH}"
 
-    # 检查并复制模板文件
-    local need_copy=false
-    if [ ! -f "${ADMIN_PROJECT_PATH}/Dockerfile" ]; then
-        need_copy=true
-    elif [ ! -f "${ADMIN_PROJECT_PATH}/nginx.conf" ]; then
-        need_copy=true
-    elif [ ! -f "${ADMIN_PROJECT_PATH}/.dockerignore" ]; then
-        need_copy=true
+    # 检查模板文件是否存在
+    if [ ! -f "${SCRIPT_DIR}/frontend/Dockerfile" ]; then
+        log_error "Dockerfile模板不存在: ${SCRIPT_DIR}/frontend/"
+        return 1
     fi
 
-    if [ "$need_copy" = "true" ]; then
-        if [ -f "${SCRIPT_DIR}/frontend/Dockerfile" ]; then
-            log_info "从模板复制构建文件..."
-            cp "${SCRIPT_DIR}/frontend/Dockerfile" "${ADMIN_PROJECT_PATH}/"
-            cp "${SCRIPT_DIR}/frontend/nginx.conf" "${ADMIN_PROJECT_PATH}/"
-            cp "${SCRIPT_DIR}/frontend/.dockerignore" "${ADMIN_PROJECT_PATH}/"
-            log_success "已复制 Dockerfile、nginx.conf、.dockerignore"
-        else
-            log_error "Dockerfile模板不存在: ${SCRIPT_DIR}/frontend/"
-            return 1
-        fi
+    # 强制复制模板文件（确保使用最新版本）
+    log_info "从模板复制构建文件..."
+    cp "${SCRIPT_DIR}/frontend/Dockerfile" "${ADMIN_PROJECT_PATH}/"
+    cp "${SCRIPT_DIR}/frontend/nginx.conf" "${ADMIN_PROJECT_PATH}/"
+    cp "${SCRIPT_DIR}/frontend/.dockerignore" "${ADMIN_PROJECT_PATH}/"
+    log_success "已复制 Dockerfile、nginx.conf、.dockerignore"
+
+    # 验证文件是否复制成功
+    if [ ! -f "${ADMIN_PROJECT_PATH}/nginx.conf" ]; then
+        log_error "nginx.conf 复制失败"
+        return 1
     fi
 
     log_step "构建前端Docker镜像..."
