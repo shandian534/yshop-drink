@@ -12,8 +12,8 @@ RUN npm config set registry https://registry.npmmirror.com
 # 复制 package.json 和 package-lock.json
 COPY package*.json ./
 
-# 安装依赖
-RUN npm install
+# 安装依赖（使用 --legacy-peer-deps 解决依赖冲突）
+RUN npm install --legacy-peer-deps
 
 # 复制源代码
 COPY . .
