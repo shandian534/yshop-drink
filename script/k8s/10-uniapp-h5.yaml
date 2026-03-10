@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yshop-uniapp-h5
+  namespace: yshop
+  labels:
+    app: yshop-uniapp-h5
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: yshop-uniapp-h5
+  template:
+    metadata:
+      labels:
+        app: yshop-uniapp-h5
+    spec:
+      imagePullSecrets:
+      - name: harbor-registry
+      containers:
+      - name: yshop-uniapp-h5
+        # UniApp H5镜像
+        image: 192.168.2.254:30002/ruoyi-vue-pro/yshop-uniapp-h5:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /h5/
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /h5/
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yshop-uniapp-h5
+  namespace: yshop
+  labels:
+    app: yshop-uniapp-h5
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+    protocol: TCP
+  selector:
+    app: yshop-uniapp-h5
+  type: ClusterIP

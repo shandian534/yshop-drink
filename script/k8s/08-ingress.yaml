@@ -33,3 +33,14 @@ spec:
             name: yshop-admin
             port:
               number: 80
+  # UniApp H5
+  - host: h5.yshop.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: yshop-uniapp-h5
+            port:
+              number: 80
