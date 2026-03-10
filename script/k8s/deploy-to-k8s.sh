@@ -140,6 +140,9 @@ ADMIN_PROJECT_PATH=${ADMIN_PROJECT_PATH:-""}
 # 是否构建前端镜像
 BUILD_ADMIN=${BUILD_ADMIN:-"false"}
 
+# 是否跳过模板文件复制（如果已手动复制）
+SKIP_TEMPLATE_COPY=${SKIP_TEMPLATE_COPY:-"false"}
+
 # ==================== 其他函数 ====================
 
 print_banner() {
@@ -286,24 +289,59 @@ build_admin_image() {
 
     log_step "准备前端构建文件..."
     log_info "前端项目: ${ADMIN_PROJECT_PATH}"
+    log_info "脚本目录: ${SCRIPT_DIR}"
 
-    # 检查模板文件是否存在
-    if [ ! -f "${SCRIPT_DIR}/frontend/Dockerfile" ]; then
-        log_error "Dockerfile模板不存在: ${SCRIPT_DIR}/frontend/"
-        return 1
-    fi
+    # 跳过复制（如果用户已手动复制）
+    if [ "${SKIP_TEMPLATE_COPY}" = "true" ]; then
+        log_info "跳过模板文件复制（SKIP_TEMPLATE_COPY=true）"
 
-    # 强制复制模板文件（确保使用最新版本）
-    log_info "从模板复制构建文件..."
-    cp "${SCRIPT_DIR}/frontend/Dockerfile" "${ADMIN_PROJECT_PATH}/"
-    cp "${SCRIPT_DIR}/frontend/nginx.conf" "${ADMIN_PROJECT_PATH}/"
-    cp "${SCRIPT_DIR}/frontend/.dockerignore" "${ADMIN_PROJECT_PATH}/"
-    log_success "已复制 Dockerfile、nginx.conf、.dockerignore"
+        # 验证必需文件是否存在
+        if [ ! -f "${ADMIN_PROJECT_PATH}/Dockerfile" ]; then
+            log_error "Dockerfile 不存在，请手动复制或设置 SKIP_TEMPLATE_COPY=false"
+            return 1
+        fi
+        if [ ! -f "${ADMIN_PROJECT_PATH}/nginx.conf" ]; then
+            log_error "nginx.conf 不存在，请手动复制或设置 SKIP_TEMPLATE_COPY=false"
+            return 1
+        fi
+        log_success "必需文件验证通过"
+    else
+        # 检查模板目录是否存在
+        if [ ! -d "${SCRIPT_DIR}/frontend" ]; then
+            log_error "模板目录不存在: ${SCRIPT_DIR}/frontend/"
+            log_info "请检查 script/k8s/frontend/ 目录是否存在"
+            log_info "或者设置 SKIP_TEMPLATE_COPY=true 并手动复制文件"
+            return 1
+        fi
 
-    # 验证文件是否复制成功
-    if [ ! -f "${ADMIN_PROJECT_PATH}/nginx.conf" ]; then
-        log_error "nginx.conf 复制失败"
-        return 1
+        # 列出模板目录内容（调试）
+        log_info "模板目录内容:"
+        ls -la "${SCRIPT_DIR}/frontend/" || {
+            log_error "无法列出模板目录"
+            return 1
+        }
+
+        # 强制复制模板文件（确保使用最新版本）
+        log_info "从模板复制构建文件到 ${ADMIN_PROJECT_PATH}..."
+        cp -v "${SCRIPT_DIR}/frontend/Dockerfile" "${ADMIN_PROJECT_PATH}/" || {
+            log_error "Dockerfile 复制失败"
+            return 1
+        }
+        cp -v "${SCRIPT_DIR}/frontend/nginx.conf" "${ADMIN_PROJECT_PATH}/" || {
+            log_error "nginx.conf 复制失败"
+            return 1
+        }
+        cp -v "${SCRIPT_DIR}/frontend/.dockerignore" "${ADMIN_PROJECT_PATH}/" || {
+            log_warn ".dockerignore 复制失败（非致命）"
+        }
+        log_success "已复制 Dockerfile、nginx.conf、.dockerignore"
+
+        # 验证文件是否复制成功
+        log_info "验证前端项目文件..."
+        ls -la "${ADMIN_PROJECT_PATH}/" | grep -E "Dockerfile|nginx.conf|\.dockerignore" || {
+            log_error "文件复制后验证失败"
+            return 1
+        }
     fi
 
     log_step "构建前端Docker镜像..."
