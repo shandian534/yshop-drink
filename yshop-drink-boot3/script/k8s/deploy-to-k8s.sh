@@ -28,6 +28,48 @@ fi
 # 切换到项目根目录
 cd "${PROJECT_ROOT}"
 
+# 自动定位前端项目目录
+find_frontend_project() {
+    log_info "自动定位前端项目..."
+
+    # 方式1: 检查当前目录的父目录（通常前后端项目在同级）
+    local parent_dir
+    parent_dir="$(dirname "${PROJECT_ROOT}")"
+
+    # 在父目录查找包含package.json的目录
+    for dir in "${parent_dir}"/*; do
+        if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
+            # 检查是否是前端项目（包含vue相关或package.json中有vue）
+            if grep -q "vue\|vite\|nuxt" "$dir/package.json" 2>/dev/null; then
+                echo "$dir"
+                return 0
+            fi
+        fi
+    done
+
+    # 方式2: 检查常见的子目录
+    for dir in "${PROJECT_ROOT}"/*; do
+        if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
+            if grep -q "vue\|vite\|nuxt" "$dir/package.json" 2>/dev/null; then
+                echo "$dir"
+                return 0
+            fi
+        fi
+    done
+
+    return 1
+}
+
+# 自动设置前端项目路径
+if [ -z "${ADMIN_PROJECT_PATH}" ]; then
+    ADMIN_PROJECT_PATH=$(find_frontend_project)
+    if [ -n "${ADMIN_PROJECT_PATH}" ]; then
+        log_info "找到前端项目: ${ADMIN_PROJECT_PATH}"
+    else
+        log_warn "未找到前端项目"
+    fi
+fi
+
 # ==================== 配置区域 ====================
 
 # Harbor配置
@@ -209,8 +251,8 @@ build_admin_image() {
     fi
 
     if [ -z "${ADMIN_PROJECT_PATH}" ]; then
-        log_warn "未指定前端项目路径，跳过前端构建"
-        log_info "要构建前端，请设置: ADMIN_PROJECT_PATH=/path/to/frontend"
+        log_warn "未找到前端项目，跳过前端构建"
+        log_info "提示：脚本会自动在同级目录查找前端项目"
         return 0
     fi
 
@@ -451,11 +493,12 @@ ${CYAN}YShop K8s 部署脚本${NC}
 
 ${GREEN}部署模式:${NC}
   full       完整部署（默认）- 构建镜像 + 部署所有K8s资源（含前后端）
-  code       代码更新 - 仅构建JAR、镜像并更新应用（快速更新）
+  backend    后端部署 - 仅部署后端服务（不含前端）
+  admin      前端部署 - 仅部署前端管理界面
+  code       后端代码更新 - 仅构建JAR、镜像并更新后端应用
   config     配置更新 - 仅更新K8s配置，不重新构建
   restart    重启应用 - 仅重启Pod，使用现有镜像
   image      仅构建镜像 - 构建JAR和Docker镜像，不部署
-  admin      前端部署 - 仅部署前端管理界面
   status     查看状态 - 显示当前部署状态
   logs       查看日志 - 实时查看应用日志
   help       显示帮助信息
@@ -469,37 +512,41 @@ ${GREEN}环境变量:${NC}
   HARBOR_PASSWORD     Harbor密码 (默认: Lpg_98534)
   HARBOR_PROJECT_NAME Harbor项目 (默认: ruoyi-vue-pro)
   BUILD_ADMIN         是否构建前端 (默认: false)
-  ADMIN_PROJECT_PATH  前端项目路径 (构建前端时需要)
+  ADMIN_PROJECT_PATH  前端项目路径 (可选，默认自动查找)
 
 ${GREEN}示例:${NC}
-  # 完整部署（首次部署或大更新）
+  # 完整部署（后端 + 前端，自动查找前端）
   $0 full
 
-  # 完整部署并构建前端
-  BUILD_ADMIN=true ADMIN_PROJECT_PATH=/root/yshop-ui-admin $0 full
+  # 完整部署（后端 + 前端，构建前端）
+  BUILD_ADMIN=true $0 full
 
-  # 仅部署前端
+  # 仅部署后端
+  $0 backend
+
+  # 仅部署前端（自动查找前端项目）
   $0 admin
 
-  # 仅部署前端并构建
-  BUILD_ADMIN=true ADMIN_PROJECT_PATH=/root/yshop-ui-admin $0 admin
+  # 仅部署前端（构建前端镜像）
+  BUILD_ADMIN=true $0 admin
 
   # 后端代码快速更新
   $0 code
 
-  # 使用自定义镜像标签更新
-  IMAGE_TAG=v1.0.0 ADMIN_IMAGE_TAG=v1.0.0 $0 code
+  # 使用自定义镜像标签
+  IMAGE_TAG=v1.0.0 ADMIN_IMAGE_TAG=v1.0.0 $0 full
 
 ${YELLOW}代码更新场景说明:${NC}
   1. 修改了Java代码 → 使用 'code' 模式
-  2. 修改了前端代码 → 使用 'admin' 模式（需设置BUILD_ADMIN=true）
+  2. 修改了前端代码 → 使用 'admin' 模式（设置 BUILD_ADMIN=true）
   3. 修改了配置文件 → 使用 'config' 模式
   4. 只想重启Pod → 使用 'restart' 模式
 
-${YELLOW}前端部署说明:${NC}
-  要部署前端，需要:
-  1. 准备前端镜像并推送到Harbor，或
-  2. 设置 BUILD_ADMIN=true 和 ADMIN_PROJECT_PATH
+${YELLOW}前端自动查找说明:${NC}
+  脚本会自动在以下位置查找前端项目：
+  1. 后端项目的父目录下的 *-vue3 目录
+  2. 后端项目的父目录下包含 package.json 且有 vue 依赖的目录
+  3. 后端项目内部的子目录
 
 EOF
 }
@@ -526,7 +573,7 @@ deploy_full() {
     push_image
 
     # 构建前端镜像（如果启用）
-    if [ "${BUILD_ADMIN}" = "true" ]; then
+    if [ "${BUILD_ADMIN}" = "true" ] && [ -n "${ADMIN_PROJECT_PATH}" ]; then
         echo ""
         build_admin_image
         push_admin_image
@@ -552,6 +599,42 @@ deploy_full() {
     echo ""
 
     log_success "========== 完整部署完成 =========="
+}
+
+deploy_backend_only() {
+    log_info "========== 后端部署模式 =========="
+
+    # 环境检查
+    log_info "========== 第一步: 环境检查 =========="
+    check_docker
+    check_kubectl
+    check_project
+    echo ""
+
+    # Docker镜像构建
+    log_info "========== 第二步: 构建镜像 =========="
+    login_harbor
+    build_jar
+    build_image
+    push_image
+    echo ""
+
+    # K8s部署
+    log_info "========== 第三步: 部署到K8s =========="
+    create_namespace
+    create_harbor_secret
+    deploy_mysql
+    deploy_redis
+    deploy_server
+    deploy_ingress
+    echo ""
+
+    # 验证部署
+    log_info "========== 第四步: 验证部署 =========="
+    show_deployment_status
+    echo ""
+
+    log_success "========== 后端部署完成 =========="
 }
 
 deploy_code() {
@@ -666,13 +749,27 @@ deploy_image_only() {
 deploy_admin_only() {
     log_info "========== 前端部署模式 =========="
 
+    # 显示前端项目信息
+    if [ -n "${ADMIN_PROJECT_PATH}" ]; then
+        log_info "前端项目: ${ADMIN_PROJECT_PATH}"
+    fi
+
     # 检查是否需要构建前端
     if [ "${BUILD_ADMIN}" = "true" ]; then
+        if [ -z "${ADMIN_PROJECT_PATH}" ]; then
+            log_error "未找到前端项目，无法构建"
+            log_info "请确保前端项目与后端项目在同一父目录下"
+            return 1
+        fi
+
         log_info "========== 第一步: 构建前端镜像 =========="
         check_docker
         login_harbor
         build_admin_image
         push_admin_image
+        echo ""
+    else
+        log_info "使用已有前端镜像: ${FULL_ADMIN_IMAGE}"
         echo ""
     fi
 
@@ -741,6 +838,9 @@ main() {
         full)
             deploy_full
             ;;
+        backend)
+            deploy_backend_only
+            ;;
         code)
             deploy_code
             ;;
@@ -771,7 +871,7 @@ main() {
     log_info "查看状态:     $0 status"
     log_info "后端更新:     $0 code"
     log_info "前端部署:     $0 admin"
-    log_info "重启应用:     $0 restart"
+    log_info "仅后端:       $0 backend"
     log_info "完整部署:     $0 full"
 }
 
