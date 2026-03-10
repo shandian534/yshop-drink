@@ -9,8 +9,8 @@ WORKDIR /app
 # 安装 pnpm
 RUN npm install -g pnpm
 
-# 设置npm镜像（使用淘宝镜像）
-RUN pnpm config set registry https://registry.npmmirror.com
+# 设置npm镜像（使用官方镜像）
+RUN pnpm config set registry https://registry.npmjs.org
 
 # 复制 package.json 和 pnpm-lock.yaml
 COPY package.json pnpm-lock.yaml* ./
