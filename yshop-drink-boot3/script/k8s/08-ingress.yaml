@@ -21,7 +21,7 @@ spec:
           service:
             name: yshop-server
             port:
-              number: 48080
+              number: 48081
   # 可选: 管理界面（如果需要）
   # - host: admin.yshop.local
   #   http:

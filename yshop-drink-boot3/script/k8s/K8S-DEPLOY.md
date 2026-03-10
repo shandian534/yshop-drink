@@ -103,10 +103,10 @@ curl http://api.yshop.local
 
 ```bash
 # 端口转发
-kubectl port-forward svc/yshop-server 48080:48080 -n yshop
+kubectl port-forward svc/yshop-server 48081:48081 -n yshop
 
 # 访问
-curl http://localhost:48080
+curl http://localhost:48081
 ```
 
 ### 方式3: NodePort
