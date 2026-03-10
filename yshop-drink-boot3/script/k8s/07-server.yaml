@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yshop-server
+  namespace: yshop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: yshop-server
+  template:
+    metadata:
+      labels:
+        app: yshop-server
+    spec:
+      containers:
+      - name: yshop-server
+        image: yshop-server:latest
+        ports:
+        - containerPort: 48080
+        env:
+        # ==================== 数据库URL配置流程说明 ====================
+        #
+        # 1. ConfigMap 定义 URL 和 用户名
+        # 2. Secret 定义密码
+        # 3. 环境变量引用 ConfigMap 和 Secret
+        # 4. ARGS 环境变量拼接完整的启动参数传给 Java 应用
+        #
+        # ==================== 步骤1: 引用ConfigMap中的URL ====================
+        - name: MASTER_DATASOURCE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: server-config
+              key: MASTER_DATASOURCE_URL
+
+        # ==================== 步骤2: 引用ConfigMap中的用户名 ====================
+        - name: MASTER_DATASOURCE_USERNAME
+          value: "root"
+
+        # ==================== 步骤3: 引用Secret中的密码 ====================
+        - name: MASTER_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: mysql-root-password
+
+        # 从库配置（相同方式）
+        - name: SLAVE_DATASOURCE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: server-config
+              key: SLAVE_DATASOURCE_URL
+        - name: SLAVE_DATASOURCE_USERNAME
+          value: "root"
+        - name: SLAVE_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: mysql-root-password
+
+        # Redis配置
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: server-config
+              key: REDIS_HOST
+
+        # ==================== 步骤4: 拼接ARGS传递给Java应用 ====================
+        # 这里的 $(变量名) 会被 K8s 替换为上面定义的环境变量值
+        - name: ARGS
+          value: >-
+            --spring.datasource.dynamic.datasource.master.url=$(MASTER_DATASOURCE_URL)
+            --spring.datasource.dynamic.datasource.master.username=$(MASTER_DATASOURCE_USERNAME)
+            --spring.datasource.dynamic.datasource.master.password=$(MASTER_DATASOURCE_PASSWORD)
+            --spring.datasource.dynamic.datasource.slave.url=$(SLAVE_DATASOURCE_URL)
+            --spring.datasource.dynamic.datasource.slave.username=$(SLAVE_DATASOURCE_USERNAME)
+            --spring.datasource.dynamic.datasource.slave.password=$(SLAVE_DATASOURCE_PASSWORD)
+            --spring.data.redis.host=$(REDIS_HOST)
