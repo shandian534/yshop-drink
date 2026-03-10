@@ -61,15 +61,18 @@ if [ -z "${PROJECT_ROOT}" ]; then
     done
 fi
 
-# 如果没找到pom.xml，报错退出
+# 如果没找到pom.xml，尝试使用YSHOP_ROOT作为项目根目录（admin模式可能不需要后端）
 if [ ! -f "${PROJECT_ROOT}/pom.xml" ]; then
-    echo "错误: 未找到项目根目录（pom.xml）"
-    echo "请确保在正确的项目结构中执行此脚本"
-    exit 1
+    # 暂时不报错，可能在admin模式下不需要后端项目
+    PROJECT_ROOT="${YSHOP_ROOT}"
 fi
 
-# 切换到项目根目录
-cd "${PROJECT_ROOT}"
+# 切换到项目根目录（如果存在pom.xml则切换到后端项目，否则切换到yshop-drink）
+if [ -f "${PROJECT_ROOT}/pom.xml" ]; then
+    cd "${PROJECT_ROOT}"
+else
+    cd "${YSHOP_ROOT}"
+fi
 
 # 自动定位前端项目目录
 find_frontend_project() {
@@ -184,6 +187,14 @@ check_kubectl() {
 
 check_project() {
     log_step "检查项目文件..."
+    log_info "当前目录: $(pwd)"
+
+    # 如果当前目录不是后端项目（没有pom.xml），则跳过后端检查
+    if [ ! -f "pom.xml" ]; then
+        log_warn "当前目录不是后端项目，跳过后端项目检查"
+        return 0
+    fi
+
     log_info "项目根目录: ${PROJECT_ROOT}"
     if [ ! -d "yshop-server" ]; then
         log_error "未找到yshop-server目录"
