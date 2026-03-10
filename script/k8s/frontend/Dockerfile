@@ -19,8 +19,8 @@ RUN pnpm config set fetch-retries 5 && \
 # 复制 package.json 和 pnpm-lock.yaml
 COPY package.json pnpm-lock.yaml* ./
 
-# 安装依赖（使用 shamefully-hoist 解决模块解析问题）
-RUN pnpm install --shamefully-hoist
+# 安装依赖
+RUN pnpm install
 
 # 复制源代码
 COPY . .
