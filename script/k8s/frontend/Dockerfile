@@ -1,7 +1,7 @@
 # ===========================================
 # 构建阶段 - 使用 Node.js 镜像
 # ===========================================
-FROM node:21-alpine AS builder
+FROM node:21.5-alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
@@ -19,8 +19,8 @@ RUN pnpm config set fetch-retries 5 && \
 # 复制 package.json 和 pnpm-lock.yaml
 COPY package.json pnpm-lock.yaml* ./
 
-# 安装依赖
-RUN pnpm install
+# 安装依赖（使用 shamefully-hoist 解决模块解析问题）
+RUN pnpm install --shamefully-hoist
 
 # 复制源代码
 COPY . .
