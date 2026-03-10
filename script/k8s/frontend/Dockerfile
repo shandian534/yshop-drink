@@ -6,14 +6,17 @@ FROM node:18-alpine AS builder
 # 设置工作目录
 WORKDIR /app
 
+# 安装 pnpm
+RUN npm install -g pnpm
+
 # 设置npm镜像（加速国内下载）
-RUN npm config set registry https://registry.npmmirror.com
+RUN pnpm config set registry https://registry.npmmirror.com
 
-# 复制 package.json 和 package-lock.json
-COPY package*.json ./
+# 复制 package.json 和 pnpm-lock.yaml
+COPY package.json pnpm-lock.yaml* ./
 
-# 安装依赖（使用 --legacy-peer-deps 解决依赖冲突）
-RUN npm install --legacy-peer-deps
+# 安装依赖
+RUN pnpm install --frozen-lockfile
 
 # 复制源代码
 COPY . .
