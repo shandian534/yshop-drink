@@ -132,6 +132,12 @@ FULL_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 # 前端镜像配置
 ADMIN_IMAGE_NAME=${ADMIN_IMAGE_NAME:-"yshop-admin"}
 ADMIN_IMAGE_TAG=${ADMIN_IMAGE_TAG:-"latest"}
+# 如果未指定标签且正在构建前端，自动生成基于时间戳的标签（用于触发k8s滚动更新）
+AUTO_GENERATED_TAG="false"
+if [ "${ADMIN_IMAGE_TAG}" = "latest" ] && [ "${BUILD_ADMIN}" = "true" ]; then
+    ADMIN_IMAGE_TAG="$(date +%Y%m%d%H%M%S)"
+    AUTO_GENERATED_TAG="true"
+fi
 FULL_ADMIN_IMAGE="${REGISTRY}/${ADMIN_IMAGE_NAME}:${ADMIN_IMAGE_TAG}"
 
 # 前端项目路径（可选，用于构建前端镜像）
@@ -817,6 +823,11 @@ deploy_admin_only() {
             log_error "未找到前端项目，无法构建"
             log_info "请确保前端项目与后端项目在同一父目录下"
             return 1
+        fi
+
+        # 显示自动生成的镜像标签
+        if [ "${AUTO_GENERATED_TAG}" = "true" ]; then
+            log_info "自动生成前端镜像标签: ${ADMIN_IMAGE_TAG}"
         fi
 
         log_info "========== 第一步: 构建前端镜像 =========="
