@@ -3,9 +3,6 @@
 # ===========================================
 FROM node:21.5-alpine AS builder
 
-# 设置工作目录
-WORKDIR /app
-
 # 安装 pnpm
 RUN npm install -g pnpm
 
@@ -16,17 +13,17 @@ RUN pnpm config set registry https://mirrors.huaweicloud.com/repository/npm/
 RUN pnpm config set fetch-retries 5 && \
     pnpm config set fetch-timeout 120000
 
-# 复制构建依赖文件
-COPY package.json pnpm-lock.yaml* ./
-
-# 安装构建依赖
-RUN pnpm install
+# 设置工作目录
+WORKDIR /app
 
 # 复制 uniapp 项目文件
 COPY ./source ./
 
-# 复制构建配置
+# 复制构建配置（如果项目中没有的话）
 COPY vite.config.js ./
+
+# 安装依赖
+RUN pnpm install
 
 # 构建 H5 版本
 RUN pnpm build:h5
