@@ -14,18 +14,22 @@ RUN pnpm config set fetch-retries 5 && \
     pnpm config set fetch-timeout 120000
 
 # 设置工作目录
-WORKDIR /app
+WORKDIR /build
 
-# 复制 uniapp 项目文件
-COPY ./source ./
+# 先复制 package.json 和 pnpm-lock.yaml（利用 Docker 缓存）
+COPY package.json pnpm-lock.yaml* ./
 
-# 复制构建配置（如果项目中没有的话）
-COPY vite.config.js ./
-
-# 安装依赖
+# 安装构建依赖
 RUN pnpm install
 
-# 构建 H5 版本
+# 创建项目目录结构并复制源文件
+RUN mkdir -p /build/src
+COPY ./source /build/src/
+
+# 复制构建配置
+COPY vite.config.js ./
+
+# 构建 H5 版本（uniapp CLI 会在 src 目录查找 manifest.json）
 RUN pnpm build:h5
 
 # ===========================================
@@ -36,14 +40,14 @@ FROM nginx:alpine
 # 设置时区
 ENV TZ=Asia/Shanghai
 
-# 安装基础工具（可选，用于调试）
+# 安装基础工具
 RUN apk add --no-cache curl tzdata && \
     cp /usr/share/zoneinfo/${TZ} /etc/localtime && \
     echo "${TZ}" > /etc/timezone && \
     apk del tzdata
 
 # 从构建阶段复制构建产物
-COPY --from=builder /app/dist/build/h5 /usr/share/nginx/html
+COPY --from=builder /build/dist/build/h5 /usr/share/nginx/html
 
 # 复制 nginx 配置
 COPY nginx.conf /etc/nginx/conf.d/default.conf
