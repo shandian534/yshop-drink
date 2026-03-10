@@ -22,14 +22,14 @@ spec:
             name: yshop-server
             port:
               number: 48081
-  # 可选: 管理界面（如果需要）
-  # - host: admin.yshop.local
-  #   http:
-  #     paths:
-  #     - path: /
-  #       pathType: Prefix
-  #       backend:
-  #         service:
-  #           name: yshop-admin
-  #           port:
-  #             number: 80
+  # 管理界面
+  - host: admin.yshop.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: yshop-admin
+            port:
+              number: 80

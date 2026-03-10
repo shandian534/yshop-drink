@@ -263,6 +263,25 @@ deploy_ingress() {
     log_success "Ingress部署完成"
 }
 
+deploy_admin() {
+    log_step "部署前端管理界面..."
+
+    # 检查前端配置文件是否存在
+    if [ ! -f "${SCRIPT_DIR}/09-admin.yaml" ]; then
+        log_warn "前端配置文件不存在，跳过前端部署"
+        log_info "如需部署前端，请准备前端镜像或配置"
+        return 0
+    fi
+
+    kubectl apply -f "${SCRIPT_DIR}/09-admin.yaml"
+
+    # 等待前端就绪
+    log_info "等待前端服务就绪..."
+    kubectl wait --for=condition=ready pod -l app=yshop-admin -n "${NAMESPACE}" --timeout=180s || true
+
+    log_success "前端管理界面部署完成"
+}
+
 # ==================== 验证函数 ====================
 
 show_deployment_status() {
@@ -288,9 +307,11 @@ show_deployment_status() {
     fi
 
     log_info "访问方式:"
-    log_info "  1. Ingress: http://api.yshop.local (需配置hosts)"
-    log_info "  2. PortForward: kubectl port-forward svc/yshop-server 48080:48080 -n ${NAMESPACE}"
-    log_info "  3. 查看日志: kubectl logs -f -l app=yshop-server -n ${NAMESPACE}"
+    log_info "  1. 后端API Ingress: http://api.yshop.local (需配置hosts)"
+    log_info "  2. 前端管理界面 Ingress: http://admin.yshop.local (需配置hosts)"
+    log_info "  3. 后端PortForward: kubectl port-forward svc/yshop-server 48081:48081 -n ${NAMESPACE}"
+    log_info "  4. 前端PortForward: kubectl port-forward svc/yshop-admin 8080:80 -n ${NAMESPACE}"
+    log_info "  5. 查看日志: kubectl logs -f -l app=yshop-server -n ${NAMESPACE}"
 }
 
 show_logs() {
@@ -408,6 +429,7 @@ deploy_full() {
     deploy_mysql
     deploy_redis
     deploy_server
+    deploy_admin
     deploy_ingress
     echo ""
 

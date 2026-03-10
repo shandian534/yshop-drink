@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yshop-admin
+  namespace: yshop
+  labels:
+    app: yshop-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: yshop-admin
+  template:
+    metadata:
+      labels:
+        app: yshop-admin
+    spec:
+      imagePullSecrets:
+      - name: harbor-registry
+      containers:
+      - name: yshop-admin
+        # 前端镜像 - 需要根据实际情况替换
+        # 可以使用已构建的镜像，如: 192.168.2.254:30002/ruoyi-vue-pro/yshop-admin:latest
+        # 或者使用nginx官方镜像 + 挂载构建好的静态文件
+        image: 192.168.2.254:30002/ruoyi-vue-pro/yshop-admin:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        # 如果需要覆盖nginx配置，可以使用ConfigMap挂载
+        # volumeMounts:
+        # - name: nginx-config
+        #   mountPath: /etc/nginx/conf.d/default.conf
+        #   subPath: default.conf
+      # volumes:
+      # - name: nginx-config
+      #   configMap:
+      #     name: admin-nginx-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yshop-admin
+  namespace: yshop
+  labels:
+    app: yshop-admin
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+    protocol: TCP
+  selector:
+    app: yshop-admin
+  type: ClusterIP
