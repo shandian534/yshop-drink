@@ -1,7 +1,7 @@
 # ===========================================
 # 构建阶段 - 使用 Node.js 镜像
 # ===========================================
-FROM node:18-alpine AS builder
+FROM node:21-alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
