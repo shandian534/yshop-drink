@@ -3,9 +3,13 @@
 
 set -e
 
+# Harbor配置（可覆盖）
+HARBOR_ADDRESS=${HARBOR_ADDRESS:-"192.168.2.254:30002"}
+HARBOR_PROJECT_NAME=${HARBOR_PROJECT_NAME:-"ruoyi-vue-pro"}
+
 # 配置变量
 NAMESPACE=${NAMESPACE:-"yshop"}
-REGISTRY=${REGISTRY:-"localhost:5000"}
+REGISTRY=${REGISTRY:-"${HARBOR_ADDRESS}/${HARBOR_PROJECT_NAME}"}
 IMAGE_NAME=${IMAGE_NAME:-"yshop-server"}
 IMAGE_TAG=${IMAGE_TAG:-"latest"}
 FULL_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
@@ -139,6 +143,7 @@ show_status() {
     log_info "访问地址:"
     log_info "  API服务: http://api.yshop.local (需要配置hosts或DNS)"
     log_info "  NodePort方式: 获取节点IP后访问"
+    log_info "  镜像仓库: ${HARBOR_ADDRESS}"
 }
 
 # 显示日志
@@ -208,6 +213,8 @@ main() {
     log_info "========== K8s 部署脚本 =========="
     log_info "命名空间: ${NAMESPACE}"
     log_info "镜像: ${FULL_IMAGE_NAME}"
+    log_info "Harbor地址: ${HARBOR_ADDRESS}"
+    log_info "Harbor项目: ${HARBOR_PROJECT_NAME}"
     echo ""
 
     check_kubectl

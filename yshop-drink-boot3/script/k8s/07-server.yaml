@@ -15,11 +15,13 @@ spec:
       labels:
         app: yshop-server
     spec:
+      imagePullSecrets:
+      - name: harbor-registry
       containers:
       - name: yshop-server
         # 镜像需要根据实际情况替换，或使用构建脚本推送
-        image: yshop-server:latest
-        imagePullPolicy: IfNotPresent
+        image: 192.168.2.254:30002/ruoyi-vue-pro/yshop-server:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 48080
           name: http

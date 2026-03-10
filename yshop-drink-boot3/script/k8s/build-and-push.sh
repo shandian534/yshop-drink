@@ -3,8 +3,14 @@
 
 set -e
 
-# 配置变量
-REGISTRY=${REGISTRY:-"localhost:5000"}  # 默认使用本地私有仓库，可根据实际情况修改
+# Harbor配置（可覆盖）
+HARBOR_ADDRESS=${HARBOR_ADDRESS:-"192.168.2.254:30002"}
+HARBOR_ACCOUNT=${HARBOR_ACCOUNT:-"admin"}
+HARBOR_PASSWORD=${HARBOR_PASSWORD:-"Lpg_98534"}
+HARBOR_PROJECT_NAME=${HARBOR_PROJECT_NAME:-"ruoyi-vue-pro"}
+
+# 镜像配置
+REGISTRY=${REGISTRY:-"${HARBOR_ADDRESS}/${HARBOR_PROJECT_NAME}"}
 IMAGE_NAME=${IMAGE_NAME:-"yshop-server"}
 IMAGE_TAG=${IMAGE_TAG:-"latest"}
 FULL_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
@@ -35,6 +41,22 @@ check_docker() {
         exit 1
     fi
     log_info "Docker运行正常"
+}
+
+# 登录Harbor镜像仓库
+login_harbor() {
+    log_info "登录Harbor镜像仓库: ${HARBOR_ADDRESS}"
+
+    echo "${HARBOR_PASSWORD}" | docker login "${HARBOR_ADDRESS}" \
+        --username="${HARBOR_ACCOUNT}" \
+        --password-stdin
+
+    if [ $? -eq 0 ]; then
+        log_info "Harbor登录成功"
+    else
+        log_error "Harbor登录失败"
+        exit 1
+    fi
 }
 
 # 构建JAR包
@@ -92,18 +114,14 @@ push_image() {
 main() {
     log_info "========== 开始构建和推送流程 =========="
     log_info "镜像名称: ${FULL_IMAGE_NAME}"
+    log_info "Harbor地址: ${HARBOR_ADDRESS}"
+    log_info "Harbor项目: ${HARBOR_PROJECT_NAME}"
 
     check_docker
+    login_harbor
     build_jar
     build_image
-
-    # 如果不是本地仓库，则推送镜像
-    if [[ "${REGISTRY}" != "localhost:5000" ]]; then
-        push_image
-    else
-        log_warn "使用本地仓库，跳过推送步骤"
-        log_warn "请确保本地私有仓库已启动: docker run -d -p 5000:5000 registry:2"
-    fi
+    push_image
 
     log_info "========== 构建和推送流程完成 =========="
     log_info "镜像: ${FULL_IMAGE_NAME}"
