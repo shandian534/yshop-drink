@@ -65,8 +65,8 @@ RUN apk add --no-cache curl tzdata && \
     echo "${TZ}" > /etc/timezone && \
     apk del tzdata
 
-# 从构建阶段复制构建产物
-COPY --from=builder /app/dist /usr/share/nginx/html
+# 从构建阶段复制构建产物（根据 BUILD_MODE 匹配 dist-${BUILD_MODE}）
+COPY --from=builder /app/dist-${BUILD_MODE} /usr/share/nginx/html
 
 # 复制 nginx 配置
 COPY nginx.conf /etc/nginx/conf.d/default.conf
