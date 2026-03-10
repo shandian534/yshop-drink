@@ -6,7 +6,7 @@ FROM node:21.5-alpine AS builder
 # 安装 pnpm
 RUN npm install -g pnpm
 
-# 设置npm镜像（使用华为云镜像）
+# 设置npm镜像
 RUN pnpm config set registry https://mirrors.huaweicloud.com/repository/npm/
 
 # 设置网络重试和超时
@@ -16,20 +16,19 @@ RUN pnpm config set fetch-retries 5 && \
 # 设置工作目录
 WORKDIR /build
 
-# 先复制 package.json 和 pnpm-lock.yaml（利用 Docker 缓存）
+# 先复制 package.json 和 pnpm-lock.yaml
 COPY package.json pnpm-lock.yaml* ./
 
 # 安装构建依赖
 RUN pnpm install
 
-# 创建项目目录结构并复制源文件
-RUN mkdir -p /build/src
-COPY ./source /build/src/
+# 复制 uniapp 项目文件（直接复制到 /build）
+COPY ./source ./
 
 # 复制构建配置
 COPY vite.config.js ./
 
-# 构建 H5 版本（uniapp CLI 会在 src 目录查找 manifest.json）
+# 构建 H5 版本
 RUN pnpm build:h5
 
 # ===========================================
