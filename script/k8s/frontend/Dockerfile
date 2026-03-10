@@ -9,8 +9,8 @@ WORKDIR /app
 # 安装 pnpm
 RUN npm install -g pnpm
 
-# 设置npm镜像（使用淘宝镜像）
-RUN pnpm config set registry https://registry.npmmirror.com
+# 设置npm镜像（使用华为云镜像）
+RUN pnpm config set registry https://mirrors.huaweicloud.com/repository/npm/
 
 # 设置网络重试和超时
 RUN pnpm config set fetch-retries 5 && \
