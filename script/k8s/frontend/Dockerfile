@@ -49,7 +49,7 @@ ENV VUE_APP_DOC_ENABLE=${VUE_APP_DOC_ENABLE}
 ENV VUE_APP_BAIDU_CODE=${VUE_APP_BAIDU_CODE}
 
 # 构建项目（根据 BUILD_MODE 选择构建脚本：local/dev/test/stage/prod）
-RUN pnpm run build:${BUILD_MODE}
+RUN pnpm build:${BUILD_MODE}
 
 # ===========================================
 # 运行阶段 - 使用 Nginx 镜像
