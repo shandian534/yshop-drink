@@ -4,6 +4,35 @@
 
 set -e
 
+# ==================== 颜色输出 ====================
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_step() {
+    echo -e "${BLUE}[STEP]${NC} $1"
+}
+
+log_success() {
+    echo -e "${CYAN}[SUCCESS]${NC} $1"
+}
+
 # ==================== 自动定位项目根目录 ====================
 
 # 获取脚本所在目录
@@ -98,34 +127,7 @@ ADMIN_PROJECT_PATH=${ADMIN_PROJECT_PATH:-""}
 # 是否构建前端镜像
 BUILD_ADMIN=${BUILD_ADMIN:-"false"}
 
-# ==================== 颜色输出 ====================
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-log_step() {
-    echo -e "${BLUE}[STEP]${NC} $1"
-}
-
-log_success() {
-    echo -e "${CYAN}[SUCCESS]${NC} $1"
-}
+# ==================== 其他函数 ====================
 
 print_banner() {
     cat << "EOF"
