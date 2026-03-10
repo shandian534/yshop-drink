@@ -22,6 +22,7 @@ RUN pnpm install
 COPY . .
 
 # 设置构建参数（可在docker build时通过ARG传入）
+ARG BUILD_MODE=prod
 ARG NODE_ENV=production
 ARG PUBLIC_PATH=/
 ARG VUE_APP_TITLE=意象商城管理系统
@@ -43,8 +44,8 @@ ENV VUE_APP_CAPTCHA_ENABLE=${VUE_APP_CAPTCHA_ENABLE}
 ENV VUE_APP_DOC_ENABLE=${VUE_APP_DOC_ENABLE}
 ENV VUE_APP_BAIDU_CODE=${VUE_APP_BAIDU_CODE}
 
-# 构建项目
-RUN pnpm run build
+# 构建项目（根据 BUILD_MODE 选择构建脚本：local/dev/test/stage/prod）
+RUN pnpm run build:${BUILD_MODE}
 
 # ===========================================
 # 运行阶段 - 使用 Nginx 镜像
