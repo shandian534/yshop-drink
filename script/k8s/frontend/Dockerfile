@@ -15,8 +15,8 @@ RUN pnpm config set registry https://registry.npmmirror.com
 # 复制 package.json 和 pnpm-lock.yaml
 COPY package.json pnpm-lock.yaml* ./
 
-# 安装依赖
-RUN pnpm install --frozen-lockfile
+# 安装依赖（忽略 lockfile 版本检查）
+RUN pnpm install
 
 # 复制源代码
 COPY . .
