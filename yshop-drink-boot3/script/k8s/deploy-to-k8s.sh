@@ -4,6 +4,30 @@
 
 set -e
 
+# ==================== 自动定位项目根目录 ====================
+
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 尝试向上查找项目根目录（包含pom.xml的目录）
+PROJECT_ROOT="${SCRIPT_DIR}"
+while [ "${PROJECT_ROOT}" != "/" ]; do
+    if [ -f "${PROJECT_ROOT}/pom.xml" ]; then
+        break
+    fi
+    PROJECT_ROOT="$(dirname "${PROJECT_ROOT}")"
+done
+
+# 如果没找到pom.xml，报错退出
+if [ ! -f "${PROJECT_ROOT}/pom.xml" ]; then
+    echo "错误: 未找到项目根目录（pom.xml）"
+    echo "请确保在正确的项目结构中执行此脚本"
+    exit 1
+fi
+
+# 切换到项目根目录
+cd "${PROJECT_ROOT}"
+
 # ==================== 配置区域 ====================
 
 # Harbor配置
@@ -95,10 +119,7 @@ check_kubectl() {
 
 check_project() {
     log_step "检查项目文件..."
-    if [ ! -f "pom.xml" ]; then
-        log_error "未找到pom.xml文件，请在项目根目录下执行此脚本"
-        exit 1
-    fi
+    log_info "项目根目录: ${PROJECT_ROOT}"
     if [ ! -d "yshop-server" ]; then
         log_error "未找到yshop-server目录"
         exit 1
@@ -197,11 +218,9 @@ create_harbor_secret() {
 deploy_mysql() {
     log_step "部署MySQL..."
 
-    local k8s_dir="script/k8s"
-
-    kubectl apply -f "${k8s_dir}/01-mysql-secret.yaml"
-    kubectl apply -f "${k8s_dir}/02-mysql-pvc.yaml"
-    kubectl apply -f "${k8s_dir}/03-mysql.yaml"
+    kubectl apply -f "${SCRIPT_DIR}/01-mysql-secret.yaml"
+    kubectl apply -f "${SCRIPT_DIR}/02-mysql-pvc.yaml"
+    kubectl apply -f "${SCRIPT_DIR}/03-mysql.yaml"
 
     log_info "等待MySQL就绪..."
     kubectl wait --for=condition=ready pod -l app=mysql -n "${NAMESPACE}" --timeout=300s || true
@@ -212,10 +231,8 @@ deploy_mysql() {
 deploy_redis() {
     log_step "部署Redis..."
 
-    local k8s_dir="script/k8s"
-
-    kubectl apply -f "${k8s_dir}/04-redis-pvc.yaml"
-    kubectl apply -f "${k8s_dir}/05-redis.yaml"
+    kubectl apply -f "${SCRIPT_DIR}/04-redis-pvc.yaml"
+    kubectl apply -f "${SCRIPT_DIR}/05-redis.yaml"
 
     log_info "等待Redis就绪..."
     kubectl wait --for=condition=ready pod -l app=redis -n "${NAMESPACE}" --timeout=180s || true
@@ -226,13 +243,11 @@ deploy_redis() {
 deploy_server() {
     log_step "部署后端服务..."
 
-    local k8s_dir="script/k8s"
-
     # 应用ConfigMap
-    kubectl apply -f "${k8s_dir}/06-server-configmap.yaml"
+    kubectl apply -f "${SCRIPT_DIR}/06-server-configmap.yaml"
 
     # 应用Deployment（已包含Harbor镜像地址和imagePullSecrets）
-    kubectl apply -f "${k8s_dir}/07-server.yaml"
+    kubectl apply -f "${SCRIPT_DIR}/07-server.yaml"
 
     log_info "等待后端服务就绪..."
     kubectl wait --for=condition=ready pod -l app=yshop-server -n "${NAMESPACE}" --timeout=300s || true
@@ -243,9 +258,7 @@ deploy_server() {
 deploy_ingress() {
     log_step "部署Ingress..."
 
-    local k8s_dir="script/k8s"
-
-    kubectl apply -f "${k8s_dir}/08-ingress.yaml"
+    kubectl apply -f "${SCRIPT_DIR}/08-ingress.yaml"
 
     log_success "Ingress部署完成"
 }
