@@ -41,10 +41,9 @@ logs/
 .git/
 .gitignore
 
-# Docker
+# Docker（保留 nginx.conf，构建时需要）
 Dockerfile
 .dockerignore
-nginx.conf
 
 # 文档
 README.md/
