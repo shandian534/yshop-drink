@@ -39,11 +39,22 @@ HARBOR_PROJECT_NAME=${HARBOR_PROJECT_NAME:-"ruoyi-vue-pro"}
 # K8s配置
 NAMESPACE=${NAMESPACE:-"yshop"}
 
-# 镜像配置
+# 后端镜像配置
 IMAGE_NAME=${IMAGE_NAME:-"yshop-server"}
 IMAGE_TAG=${IMAGE_TAG:-"latest"}
 REGISTRY="${HARBOR_ADDRESS}/${HARBOR_PROJECT_NAME}"
 FULL_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+# 前端镜像配置
+ADMIN_IMAGE_NAME=${ADMIN_IMAGE_NAME:-"yshop-admin"}
+ADMIN_IMAGE_TAG=${ADMIN_IMAGE_TAG:-"latest"}
+FULL_ADMIN_IMAGE="${REGISTRY}/${ADMIN_IMAGE_NAME}:${ADMIN_IMAGE_TAG}"
+
+# 前端项目路径（可选，用于构建前端镜像）
+ADMIN_PROJECT_PATH=${ADMIN_PROJECT_PATH:-""}
+
+# 是否构建前端镜像
+BUILD_ADMIN=${BUILD_ADMIN:-"false"}
 
 # ==================== 颜色输出 ====================
 
@@ -189,6 +200,66 @@ push_image() {
     log_success "镜像推送完成"
 }
 
+# ==================== 前端构建函数 ====================
+
+build_admin_image() {
+    if [ "${BUILD_ADMIN}" != "true" ]; then
+        log_info "跳过前端镜像构建（BUILD_ADMIN=false）"
+        return 0
+    fi
+
+    if [ -z "${ADMIN_PROJECT_PATH}" ]; then
+        log_warn "未指定前端项目路径，跳过前端构建"
+        log_info "要构建前端，请设置: ADMIN_PROJECT_PATH=/path/to/frontend"
+        return 0
+    fi
+
+    if [ ! -d "${ADMIN_PROJECT_PATH}" ]; then
+        log_error "前端项目路径不存在: ${ADMIN_PROJECT_PATH}"
+        return 1
+    fi
+
+    log_step "构建前端Docker镜像..."
+    log_info "前端项目: ${ADMIN_PROJECT_PATH}"
+    log_info "镜像名称: ${FULL_ADMIN_IMAGE}"
+
+    # 检查前端项目是否有Dockerfile
+    if [ ! -f "${ADMIN_PROJECT_PATH}/Dockerfile" ]; then
+        log_info "前端项目缺少Dockerfile，从模板复制..."
+
+        if [ -f "${SCRIPT_DIR}/frontend/Dockerfile" ]; then
+            cp "${SCRIPT_DIR}/frontend/Dockerfile" "${ADMIN_PROJECT_PATH}/"
+            cp "${SCRIPT_DIR}/frontend/nginx.conf" "${ADMIN_PROJECT_PATH}/"
+            cp "${SCRIPT_DIR}/frontend/.dockerignore" "${ADMIN_PROJECT_PATH}/"
+            log_info "已复制Dockerfile、nginx.conf和.dockerignore"
+        else
+            log_error "Dockerfile模板不存在"
+            return 1
+        fi
+    fi
+
+    # 保存当前目录
+    local current_dir
+    current_dir="$(pwd)"
+
+    # 进入前端项目目录构建
+    cd "${ADMIN_PROJECT_PATH}"
+    docker build -t "${FULL_ADMIN_IMAGE}" .
+    cd "${current_dir}"
+
+    log_success "前端镜像构建完成"
+}
+
+push_admin_image() {
+    if [ "${BUILD_ADMIN}" != "true" ]; then
+        return 0
+    fi
+
+    log_step "推送前端镜像到Harbor..."
+    docker push "${FULL_ADMIN_IMAGE}"
+    log_success "前端镜像推送完成"
+}
+
 # ==================== K8s相关函数 ====================
 
 create_namespace() {
@@ -273,7 +344,16 @@ deploy_admin() {
         return 0
     fi
 
-    kubectl apply -f "${SCRIPT_DIR}/09-admin.yaml"
+    # 如果构建了前端镜像，更新部署配置
+    if [ "${BUILD_ADMIN}" = "true" ]; then
+        log_info "使用自定义前端镜像: ${FULL_ADMIN_IMAGE}"
+        kubectl set image deployment/yshop-admin \
+            yshop-admin="${FULL_ADMIN_IMAGE}" \
+            -n "${NAMESPACE}"
+    else
+        # 使用配置文件中的默认镜像
+        kubectl apply -f "${SCRIPT_DIR}/09-admin.yaml"
+    fi
 
     # 等待前端就绪
     log_info "等待前端服务就绪..."
@@ -360,44 +440,56 @@ ${CYAN}YShop K8s 部署脚本${NC}
 用法: $0 [模式]
 
 ${GREEN}部署模式:${NC}
-  full       完整部署（默认）- 构建镜像 + 部署所有K8s资源
+  full       完整部署（默认）- 构建镜像 + 部署所有K8s资源（含前后端）
   code       代码更新 - 仅构建JAR、镜像并更新应用（快速更新）
   config     配置更新 - 仅更新K8s配置，不重新构建
   restart    重启应用 - 仅重启Pod，使用现有镜像
   image      仅构建镜像 - 构建JAR和Docker镜像，不部署
+  admin      前端部署 - 仅部署前端管理界面
   status     查看状态 - 显示当前部署状态
   logs       查看日志 - 实时查看应用日志
   help       显示帮助信息
 
 ${GREEN}环境变量:${NC}
   NAMESPACE           命名空间 (默认: yshop)
-  IMAGE_TAG           镜像标签 (默认: latest)
+  IMAGE_TAG           后端镜像标签 (默认: latest)
+  ADMIN_IMAGE_TAG     前端镜像标签 (默认: latest)
   HARBOR_ADDRESS      Harbor地址 (默认: 192.168.2.254:30002)
   HARBOR_ACCOUNT      Harbor账号 (默认: admin)
   HARBOR_PASSWORD     Harbor密码 (默认: Lpg_98534)
   HARBOR_PROJECT_NAME Harbor项目 (默认: ruoyi-vue-pro)
+  BUILD_ADMIN         是否构建前端 (默认: false)
+  ADMIN_PROJECT_PATH  前端项目路径 (构建前端时需要)
 
 ${GREEN}示例:${NC}
   # 完整部署（首次部署或大更新）
   $0 full
 
-  # 代码快速更新（仅更新应用代码）
+  # 完整部署并构建前端
+  BUILD_ADMIN=true ADMIN_PROJECT_PATH=/root/yshop-ui-admin $0 full
+
+  # 仅部署前端
+  $0 admin
+
+  # 仅部署前端并构建
+  BUILD_ADMIN=true ADMIN_PROJECT_PATH=/root/yshop-ui-admin $0 admin
+
+  # 后端代码快速更新
   $0 code
 
   # 使用自定义镜像标签更新
-  IMAGE_TAG=v1.0.0 $0 code
-
-  # 仅重启应用
-  $0 restart
-
-  # 查看部署状态
-  $0 status
+  IMAGE_TAG=v1.0.0 ADMIN_IMAGE_TAG=v1.0.0 $0 code
 
 ${YELLOW}代码更新场景说明:${NC}
   1. 修改了Java代码 → 使用 'code' 模式
-  2. 修改了配置文件 → 使用 'config' 模式
-  3. 修改了K8s配置 → 使用 'config' 模式
+  2. 修改了前端代码 → 使用 'admin' 模式（需设置BUILD_ADMIN=true）
+  3. 修改了配置文件 → 使用 'config' 模式
   4. 只想重启Pod → 使用 'restart' 模式
+
+${YELLOW}前端部署说明:${NC}
+  要部署前端，需要:
+  1. 准备前端镜像并推送到Harbor，或
+  2. 设置 BUILD_ADMIN=true 和 ADMIN_PROJECT_PATH
 
 EOF
 }
@@ -417,9 +509,19 @@ deploy_full() {
     # Docker镜像构建
     log_info "========== 第二步: 构建镜像 =========="
     login_harbor
+
+    # 构建后端镜像
     build_jar
     build_image
     push_image
+
+    # 构建前端镜像（如果启用）
+    if [ "${BUILD_ADMIN}" = "true" ]; then
+        echo ""
+        build_admin_image
+        push_admin_image
+    fi
+
     echo ""
 
     # K8s部署
@@ -551,6 +653,36 @@ deploy_image_only() {
     log_info "  IMAGE_TAG=${IMAGE_TAG} $0 code"
 }
 
+deploy_admin_only() {
+    log_info "========== 前端部署模式 =========="
+
+    # 检查是否需要构建前端
+    if [ "${BUILD_ADMIN}" = "true" ]; then
+        log_info "========== 第一步: 构建前端镜像 =========="
+        check_docker
+        login_harbor
+        build_admin_image
+        push_admin_image
+        echo ""
+    fi
+
+    # K8s部署
+    log_info "========== 第二步: 部署到K8s =========="
+    check_kubectl
+    create_namespace
+    create_harbor_secret
+    deploy_admin
+    deploy_ingress
+    echo ""
+
+    # 验证部署
+    log_info "========== 第三步: 验证部署 =========="
+    show_deployment_status
+    echo ""
+
+    log_success "========== 前端部署完成 =========="
+}
+
 # ==================== 主函数 ====================
 
 main() {
@@ -586,8 +718,12 @@ main() {
     log_info "========== YShop K8s 部署 =========="
     log_info "部署模式: ${mode}"
     log_info "命名空间: ${NAMESPACE}"
-    log_info "镜像: ${FULL_IMAGE_NAME}"
+    log_info "后端镜像: ${FULL_IMAGE_NAME}"
+    log_info "前端镜像: ${FULL_ADMIN_IMAGE}"
     log_info "项目根目录: ${PROJECT_ROOT}"
+    if [ "${BUILD_ADMIN}" = "true" ]; then
+        log_info "前端构建: 是"
+    fi
     echo ""
 
     # 根据模式执行部署
@@ -607,6 +743,9 @@ main() {
         image)
             deploy_image_only
             ;;
+        admin)
+            deploy_admin_only
+            ;;
         *)
             log_error "未知模式: $mode"
             echo ""
@@ -618,10 +757,12 @@ main() {
     # 通用提示信息
     echo ""
     log_info "========== 快捷操作 =========="
-    log_info "查看日志:   $0 logs"
-    log_info "查看状态:   $0 status"
-    log_info "代码更新:   $0 code"
-    log_info "重启应用:   $0 restart"
+    log_info "查看日志:     $0 logs"
+    log_info "查看状态:     $0 status"
+    log_info "后端更新:     $0 code"
+    log_info "前端部署:     $0 admin"
+    log_info "重启应用:     $0 restart"
+    log_info "完整部署:     $0 full"
 }
 
 # 捕获Ctrl+C
