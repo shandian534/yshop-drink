@@ -56,6 +56,9 @@ RUN pnpm build:${BUILD_MODE}
 # ===========================================
 FROM nginx:alpine
 
+# 声明构建模式（需要与构建阶段保持一致）
+ARG BUILD_MODE=prod
+
 # 设置时区
 ENV TZ=Asia/Shanghai
 
