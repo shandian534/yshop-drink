@@ -298,18 +298,93 @@ show_logs() {
     kubectl logs -f -l app=yshop-server -n "${NAMESPACE}"
 }
 
-# ==================== 主函数 ====================
+# ==================== 代码变更检测 ====================
 
-main() {
-    clear
-    print_banner
+check_code_changes() {
+    log_info "检测代码变更..."
 
-    log_info "========== YShop K8s 一键部署 =========="
-    log_info "命名空间: ${NAMESPACE}"
-    log_info "镜像名称: ${FULL_IMAGE_NAME}"
-    log_info "Harbor地址: ${HARBOR_ADDRESS}"
-    log_info "Harbor项目: ${HARBOR_PROJECT_NAME}"
-    echo ""
+    # 检查是否在git仓库中
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        log_warn "不是git仓库，跳过变更检测"
+        return 0
+    fi
+
+    # 获取最近的提交时间
+    local last_commit
+    last_commit=$(git log -1 --format="%ct" 2>/dev/null || echo "0")
+
+    # 获取target目录的最后修改时间
+    if [ -f "yshop-server/target/yshop-server.jar" ]; then
+        local jar_time
+        jar_time=$(stat -c "%Y" yshop-server/target/yshop-server.jar 2>/dev/null || stat -f "%m" yshop-server/target/yshop-server.jar)
+
+        if [ "$jar_time" -lt "$last_commit" ]; then
+            log_warn "JAR包比最新提交旧，建议重新构建"
+            return 1
+        else
+            log_info "JAR包是最新的"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# ==================== 帮助信息 ====================
+
+show_help() {
+    cat << EOF
+${CYAN}YShop K8s 部署脚本${NC}
+
+用法: $0 [模式]
+
+${GREEN}部署模式:${NC}
+  full       完整部署（默认）- 构建镜像 + 部署所有K8s资源
+  code       代码更新 - 仅构建JAR、镜像并更新应用（快速更新）
+  config     配置更新 - 仅更新K8s配置，不重新构建
+  restart    重启应用 - 仅重启Pod，使用现有镜像
+  image      仅构建镜像 - 构建JAR和Docker镜像，不部署
+  status     查看状态 - 显示当前部署状态
+  logs       查看日志 - 实时查看应用日志
+  help       显示帮助信息
+
+${GREEN}环境变量:${NC}
+  NAMESPACE           命名空间 (默认: yshop)
+  IMAGE_TAG           镜像标签 (默认: latest)
+  HARBOR_ADDRESS      Harbor地址 (默认: 192.168.2.254:30002)
+  HARBOR_ACCOUNT      Harbor账号 (默认: admin)
+  HARBOR_PASSWORD     Harbor密码 (默认: Lpg_98534)
+  HARBOR_PROJECT_NAME Harbor项目 (默认: ruoyi-vue-pro)
+
+${GREEN}示例:${NC}
+  # 完整部署（首次部署或大更新）
+  $0 full
+
+  # 代码快速更新（仅更新应用代码）
+  $0 code
+
+  # 使用自定义镜像标签更新
+  IMAGE_TAG=v1.0.0 $0 code
+
+  # 仅重启应用
+  $0 restart
+
+  # 查看部署状态
+  $0 status
+
+${YELLOW}代码更新场景说明:${NC}
+  1. 修改了Java代码 → 使用 'code' 模式
+  2. 修改了配置文件 → 使用 'config' 模式
+  3. 修改了K8s配置 → 使用 'config' 模式
+  4. 只想重启Pod → 使用 'restart' 模式
+
+EOF
+}
+
+# ==================== 部署模式函数 ====================
+
+deploy_full() {
+    log_info "========== 完整部署模式 =========="
 
     # 环境检查
     log_info "========== 第一步: 环境检查 =========="
@@ -342,17 +417,193 @@ main() {
     show_deployment_status
     echo ""
 
-    log_success "========== 部署完成 =========="
+    log_success "========== 完整部署完成 =========="
+}
+
+deploy_code() {
+    log_info "========== 代码更新模式 =========="
+    log_warn "此模式仅更新应用代码，不修改基础设施配置"
     echo ""
-    log_info "如需查看日志，请运行:"
-    log_info "  kubectl logs -f -l app=yshop-server -n ${NAMESPACE}"
+
+    # 环境检查
+    log_info "========== 第一步: 环境检查 =========="
+    check_docker
+    check_kubectl
+    check_project
+
+    # 检查代码变更
+    check_code_changes || log_warn "代码可能已变更，将重新构建"
     echo ""
-    log_info "如需重新部署，请运行:"
-    log_info "  kubectl rollout restart deployment/yshop-server -n ${NAMESPACE}"
+
+    # 构建镜像
+    log_info "========== 第二步: 构建并推送镜像 =========="
+    login_harbor
+    build_jar
+    build_image
+    push_image
+    echo ""
+
+    # 更新应用
+    log_info "========== 第三步: 更新应用 =========="
+    log_info "更新Deployment镜像版本..."
+
+    # 使用kubectl set image更新
+    kubectl set image deployment/yshop-server \
+        yshop-server="${FULL_IMAGE_NAME}" \
+        -n "${NAMESPACE}"
+
+    # 等待滚动更新完成
+    log_info "等待滚动更新完成..."
+    kubectl rollout status deployment/yshop-server -n "${NAMESPACE}" --timeout=300s
+    echo ""
+
+    # 验证更新
+    log_info "========== 第四步: 验证更新 =========="
+    show_deployment_status
+    echo ""
+
+    log_success "========== 代码更新完成 =========="
+}
+
+deploy_config() {
+    log_info "========== 配置更新模式 =========="
+    log_warn "此模式仅更新配置，不重新构建镜像"
+    echo ""
+
+    check_kubectl
+
+    log_info "========== 更新配置 =========="
+    create_harbor_secret
+
+    # 重新应用ConfigMap
+    kubectl apply -f "${SCRIPT_DIR}/06-server-configmap.yaml"
+
+    # 重启Pod以应用新配置
+    log_info "重启应用以应用新配置..."
+    kubectl rollout restart deployment/yshop-server -n "${NAMESPACE}"
+
+    # 等待重启完成
+    kubectl rollout status deployment/yshop-server -n "${NAMESPACE}" --timeout=300s
+    echo ""
+
+    show_deployment_status
+    echo ""
+
+    log_success "========== 配置更新完成 =========="
+}
+
+deploy_restart() {
+    log_info "========== 重启应用模式 =========="
+
+    check_kubectl
+
+    log_info "重启应用Pod..."
+    kubectl rollout restart deployment/yshop-server -n "${NAMESPACE}"
+
+    log_info "等待重启完成..."
+    kubectl rollout status deployment/yshop-server -n "${NAMESPACE}" --timeout=300s
+    echo ""
+
+    show_deployment_status
+    echo ""
+
+    log_success "========== 应用重启完成 =========="
+}
+
+deploy_image_only() {
+    log_info "========== 仅构建镜像模式 =========="
+
+    check_docker
+    check_project
+
+    login_harbor
+    build_jar
+    build_image
+    push_image
+
+    echo ""
+    log_success "========== 镜像构建完成 =========="
+    log_info "镜像: ${FULL_IMAGE_NAME}"
+    echo ""
+    log_info "要部署此镜像，请运行:"
+    log_info "  IMAGE_TAG=${IMAGE_TAG} $0 code"
+}
+
+# ==================== 主函数 ====================
+
+main() {
+    local mode="${1:-full}"
+
+    # 显示横幅
+    if [ "$mode" != "status" ] && [ "$mode" != "logs" ] && [ "$mode" != "help" ]; then
+        clear
+        print_banner
+    fi
+
+    # 处理特殊模式
+    case "$mode" in
+        help|--help|-h)
+            show_help
+            exit 0
+            ;;
+        status)
+            log_info "========== 部署状态 =========="
+            echo ""
+            show_deployment_status
+            exit 0
+            ;;
+        logs)
+            log_info "========== 应用日志 (Ctrl+C退出) =========="
+            echo ""
+            kubectl logs -f -l app=yshop-server -n "${NAMESPACE}"
+            exit 0
+            ;;
+    esac
+
+    # 显示部署信息
+    log_info "========== YShop K8s 部署 =========="
+    log_info "部署模式: ${mode}"
+    log_info "命名空间: ${NAMESPACE}"
+    log_info "镜像: ${FULL_IMAGE_NAME}"
+    log_info "项目根目录: ${PROJECT_ROOT}"
+    echo ""
+
+    # 根据模式执行部署
+    case "$mode" in
+        full)
+            deploy_full
+            ;;
+        code)
+            deploy_code
+            ;;
+        config)
+            deploy_config
+            ;;
+        restart)
+            deploy_restart
+            ;;
+        image)
+            deploy_image_only
+            ;;
+        *)
+            log_error "未知模式: $mode"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+
+    # 通用提示信息
+    echo ""
+    log_info "========== 快捷操作 =========="
+    log_info "查看日志:   $0 logs"
+    log_info "查看状态:   $0 status"
+    log_info "代码更新:   $0 code"
+    log_info "重启应用:   $0 restart"
 }
 
 # 捕获Ctrl+C
-trap 'echo -e "\n${RED}部署已中断${NC}"; exit 1' INT
+trap 'echo -e "\n${RED}操作已中断${NC}"; exit 1' INT
 
 # 执行主函数
 main "$@"
