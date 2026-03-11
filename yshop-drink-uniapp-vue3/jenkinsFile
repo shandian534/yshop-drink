@@ -72,10 +72,10 @@ pipeline {
 
   parameters {
     string(name: 'project_name', defaultValue: 'yshop-drink-h5', description: '项目名称')
-    string(name: 'git_url', defaultValue: 'https://gitee.com/shandian534/yshop-drink.git', description: 'git仓库地址')
-    string(name: 'gitCredentialsId', defaultValue: 'gitee', description: 'git访问凭证')
+    string(name: 'git_url', defaultValue: 'https://github.com/shandian534/yshop-drink.git', description: 'git仓库地址')
+    string(name: 'gitCredentialsId', defaultValue: 'github', description: 'git访问凭证')
     string(name: 'deploy_version', defaultValue: 'latest', description: '发布版本')
-    string(name: 'branch_name', defaultValue: 'master', description: 'git分支')
+    string(name: 'branch_name', defaultValue: 'feature/deploy_254', description: 'git分支')
     string(name: 'k8sServerUrl', defaultValue: 'https://192.168.2.254:6443', description: 'k8s集群服务地址')
   }
 }
