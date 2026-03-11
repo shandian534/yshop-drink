@@ -1,0 +1,81 @@
+// yshop-drink-uniapp-vue3 H5 CI/CD 流水线
+// 支持 H5 构建部署到 Kubernetes 集群
+
+pipeline {
+  agent {
+    node {
+      label 'nodejs'
+    }
+  }
+
+  stages {
+    stage('clone code') {
+      agent none
+      steps {
+        git(url: "${params.git_url}", credentialsId: "${params.gitCredentialsId}", branch: "${params.branch_name}", changelog: true, poll: false)
+      }
+    }
+
+    stage('pnpm build') {
+      agent none
+      steps {
+        container('base') {
+          sh 'npm install pnpm -g'
+          sh 'pnpm config set registry https://mirrors.cloud.tencent.com/npm/'
+          sh 'pnpm config set network-timeout 600000'
+          sh 'pnpm install'
+          sh 'pnpm build:h5'
+        }
+      }
+    }
+
+    stage('docker build') {
+      agent none
+      steps {
+        container('base') {
+          sh 'pwd'
+          sh 'ls -la dist/build/h5'
+          sh "docker build -t ${env.HARBOR_ADDRESS}/${env.HARBOR_PROJECT_NAME}/${env.APP_NAME}:${params.deploy_version} ."
+          sh "docker login ${env.HARBOR_ADDRESS} -u ${env.HARBOR_ACCOUNT} -p ${env.HARBOR_PASSWORD}"
+          sh "docker push ${env.HARBOR_ADDRESS}/${env.HARBOR_PROJECT_NAME}/${env.APP_NAME}:${params.deploy_version}"
+        }
+      }
+    }
+
+    stage('k8s apply') {
+      agent none
+      steps {
+        container('base') {
+          sh """
+            sed -i 's|\${IMAGE_NAME}|${env.HARBOR_ADDRESS}/${env.HARBOR_PROJECT_NAME}/${env.APP_NAME}:${params.deploy_version}|g' ${env.K8S_YAML}
+          """
+          withKubeConfig(credentialsId: 'k8s-service-account', serverUrl: "${params.k8sServerUrl}") {
+            sh "kubectl apply -f ${env.K8S_YAML}"
+          }
+        }
+      }
+    }
+  }
+
+  environment {
+    // Harbor 镜像仓库配置
+    HARBOR_ADDRESS = '192.168.2.254:30002'
+    HARBOR_ACCOUNT = 'admin'
+    HARBOR_PASSWORD = 'Lpg_98534'
+    HARBOR_PROJECT_NAME = 'ruoyi-vue-pro'
+
+    // 应用配置
+    APP_NAME = 'yshop-drink-h5'
+    DOCKERFILE_DIR = '.'
+    K8S_YAML = './k8s-h5.yaml'
+  }
+
+  parameters {
+    string(name: 'project_name', defaultValue: 'yshop-drink-h5', description: '项目名称')
+    string(name: 'git_url', defaultValue: 'https://gitee.com/shandian534/yshop-drink.git', description: 'git仓库地址')
+    string(name: 'gitCredentialsId', defaultValue: 'gitee', description: 'git访问凭证')
+    string(name: 'deploy_version', defaultValue: 'latest', description: '发布版本')
+    string(name: 'branch_name', defaultValue: 'master', description: 'git分支')
+    string(name: 'k8sServerUrl', defaultValue: 'https://192.168.2.254:6443', description: 'k8s集群服务地址')
+  }
+}
